@@ -1,0 +1,9 @@
+{
+  "name": "PolePlanner",
+  "version": "0.0.1",
+  "title": "PolePlanner",
+  "author": "bob809",
+  "description": "Automatically place power poles.",
+  "factorio_version": "0.15.0",
+  "dependencies": ["base >= 0.15.00"]
+}
