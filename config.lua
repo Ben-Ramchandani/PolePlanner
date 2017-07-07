@@ -1,6 +1,5 @@
 PB_CONF = {
-    pole = "medium-electric-pole",
-    --pole = "substation",
+    pole = "small-electric-pole",
     run_over_multiple_ticks = true
 }
 
@@ -56,8 +55,6 @@ end
 function reset_all()
     global.PB_CONF_overrides = {}
 end
-
-remote.add_interface("PoleBuilder", {config = set_config_global, reset = reset_all})
 
 
 function init_config()

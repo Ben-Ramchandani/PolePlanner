@@ -4,6 +4,7 @@ require("config")
 
 function can_place_pole(state, position)
     position = abs_position(state, position)
+    -- Assume pole is square
     local left = position.x + state.conf.prototype.collision_box.left_top.x
     local right = position.x + state.conf.prototype.collision_box.right_bottom.x
     local top = position.y + state.conf.prototype.collision_box.left_top.y
@@ -22,7 +23,7 @@ function can_place_pole(state, position)
         if entity.name == "entity-ghost" and entity.ghost_type ~= "tile" then
             prototype = entity.ghost_prototype
         end
-        if not entity.to_be_deconstructed(state.force) and prototype.collision_box and prototype.collision_mask and prototype.collision_mask["object-layer"] and entity.name ~= "player" and entity.type ~= car then
+        if not entity.to_be_deconstructed(state.force) and prototype.collision_box and prototype.collision_mask and prototype.collision_mask["object-layer"] and entity.name ~= "player" and entity.type ~= "car" then
             return false
         end
     end
@@ -48,6 +49,18 @@ function rel_position_true(state, position)
     return {x = position.x - state.left, y = position.y - state.top}
 end
 
+function print_info(state, info)
+    if not state.surpress_info then
+        state.player.print(info)
+    end
+end
+
+function print_warning(state, warning)
+    if not state.surpress_warnings then
+        state.player.print(warning)
+    end
+end
+
 function place_pole_enitity_counts(state, position)
     for i, wrapper in ipairs(state.area[position.x][position.y].reachable_entities) do
         if wrapper.unpowered then
@@ -57,29 +70,28 @@ function place_pole_enitity_counts(state, position)
     end
 end
 
-
 function place_pole_collision_adjustment(state, position)
-    for i = math.max(state.conf.collision_left + position.x, 1),math.min(state.conf.collision_right + position.x, state.width) do
-        for j = math.max(state.conf.collision_top + position.y, 1),math.min(state.conf.collision_bottom + position.y, state.height) do
+    for i = math.max(state.conf.collision_left + position.x, 1), math.min(state.conf.collision_right + position.x, state.width) do
+        for j = math.max(state.conf.collision_top + position.y, 1), math.min(state.conf.collision_bottom + position.y, state.height) do
             state.area[i][j] = false
         end
     end
 end
 
 function reachability_any_pole(state, rel_position, wire_distance)
+    wire_distance = math.floor(wire_distance)
     local left = math.floor(math.max(rel_position.x - wire_distance, 1))
     local top = math.floor(math.max(rel_position.y - wire_distance, 1))
     local right = math.ceil(math.min(rel_position.x + wire_distance, state.width))
     local bottom = math.ceil(math.min(rel_position.y + wire_distance, state.height))
-    for i=left,right do
-        for j=top,bottom do
+    for i = left, right do
+        for j = top, bottom do
             if state.area[i][j] and distance(rel_position.x, rel_position.y, i, j) <= wire_distance then
                 state.area[i][j].reachable = true
             end
         end
     end
 end
-
 
 function place_pole_reachability(state, position)
     reachability_any_pole(state, position, state.conf.wire_distance)
@@ -89,27 +101,24 @@ function place_pole(state, position)
     local data = {name = state.conf.pole, position = abs_position(state, position), force = state.force}
     
     place_blueprint(state.surface, data)
-
+    
     place_pole_enitity_counts(state, position)
     place_pole_collision_adjustment(state, position)
     place_pole_reachability(state, position)
-
+    
     table.insert(state.pole_positions, position)
     return true
 end
 
 function connected(pole_position, pole_radius, entity_bounding_box)
-    return entity_bounding_box.left_top.x < pole_position.x + pole_radius
-        and entity_bounding_box.right_bottom.x > pole_position.x - pole_radius
-        and entity_bounding_box.left_top.y < pole_position.y + pole_radius
-        and entity_bounding_box.right_bottom.y > pole_position.y - pole_radius
+    return entity_bounding_box.left_top.x < pole_position.x + pole_radius and entity_bounding_box.right_bottom.x > pole_position.x - pole_radius and entity_bounding_box.left_top.y < pole_position.y + pole_radius and entity_bounding_box.right_bottom.y > pole_position.y - pole_radius
 end
 
 function set_up_area(state)
     if state.count <= state.width then
         table.insert(state.area, {})
         local i = state.count
-        for j=1,state.height do
+        for j = 1, state.height do
             table.insert(state.area[i], {reachable_entities = {}})
         end
         return true
@@ -134,7 +143,7 @@ function filter_entities(state)
         end
     end
     if #powered_entities == 0 then
-        state.player.print("No entities found.")
+        print_info(state, {"pole-builder.no-entities"})
         state.stage = 1000
     end
     state.entities = powered_entities
@@ -143,9 +152,7 @@ function filter_entities(state)
 end
 
 function initial_poles(state)
-
     if state.count <= #state.initial_poles then
-
         local position = state.initial_poles[state.count].abs_position
         local prototype = state.initial_poles[state.count].prototype
         local x = position.x
@@ -165,7 +172,7 @@ function initial_poles(state)
         return true
     else
         if state.entity_count == 0 then
-            state.player.print("All entities were already powered.")
+            print_info(state, {"pole-builder.already-powered"})
             state.stage = 1000
         end
         return false
@@ -176,15 +183,15 @@ function initialise_counts(state)
     if state.count <= #state.entities then
         local entity = state.entities[state.count]
         
-        local left = math.clamp(math.floor(entity.bounding_box.left_top.x       - state.left    - state.conf.supply_distance - state.conf.offset + 1), 1, state.width)
-        local right = math.clamp(math.ceil(entity.bounding_box.right_bottom.x   - state.left    + state.conf.supply_distance - state.conf.offset - 1), 1, state.width)
-        local top = math.clamp(math.floor(entity.bounding_box.left_top.y        - state.top     - state.conf.supply_distance - state.conf.offset + 1), 1, state.height)
-        local bottom = math.clamp(math.ceil(entity.bounding_box.right_bottom.y  - state.top     + state.conf.supply_distance - state.conf.offset - 1), 1, state.height)
-
+        local left = math.clamp(math.floor(entity.bounding_box.left_top.x - state.left - state.conf.supply_distance - state.conf.offset + 1), 1, state.width)
+        local right = math.clamp(math.ceil(entity.bounding_box.right_bottom.x - state.left + state.conf.supply_distance - state.conf.offset - 1), 1, state.width)
+        local top = math.clamp(math.floor(entity.bounding_box.left_top.y - state.top - state.conf.supply_distance - state.conf.offset + 1), 1, state.height)
+        local bottom = math.clamp(math.ceil(entity.bounding_box.right_bottom.y - state.top + state.conf.supply_distance - state.conf.offset - 1), 1, state.height)
+        
         local wrapper = {unpowered = true}
-
-        for i=left,right do
-            for j=top,bottom do
+        
+        for i = left, right do
+            for j = top, bottom do
                 local pos = state.area[i][j]
                 if pos then
                     table.insert(pos.reachable_entities, wrapper)
@@ -199,7 +206,7 @@ end
 
 function collision_check(state)
     if state.count <= state.width then
-        for j=1,state.height do
+        for j = 1, state.height do
             if not can_place_pole(state, {x = state.count, y = j}) then
                 state.area[state.count][j] = false
             end
@@ -231,7 +238,7 @@ function place_initial_pole(state)
             place_pole(state, max_position)
         else
             state.stage = 1000
-            state.player.print("Nowhere to place pole, but " .. state.entity_count .. " entities remain unpowered.")
+            print_warning(state, {"pole-builder.cant-place-pole", state.entity_count})
         end
     end
     return false
@@ -285,7 +292,7 @@ end
 function find_smallest_distance(from_list, to)
     local closest_distance = math.huge
     for i, pos in ipairs(from_list) do
-        local dist = distance_position(to, pos) 
+        local dist = distance_position(to, pos)
         if dist < closest_distance then
             closest_distance = dist
         end
@@ -297,7 +304,7 @@ function join_networks(state)
     if not state.best_distance then
         state.best_distance = find_smallest_distance(state.pole_positions, state.aim_for_position)
     end
-
+    
     local best_position = find_closest_position(state, state.aim_for_position)
     if best_position then
         local dist = distance_position(best_position, state.aim_for_position)
@@ -311,9 +318,7 @@ function join_networks(state)
     else
         return false
     end
-
 end
-
 
 function place_best_pole(state)
     if state.placement_stage == "searching" then
@@ -333,11 +338,10 @@ function place_best_pole(state)
             state.aim_for_position = max_position
             state.placement_stage = "joining"
         else
-            state.player.print("Nowhere to place pole, but " .. state.entity_count .. " entities remain unpowered.")
+            print_warning(state, {"pole-builder.cant-place-pole", state.entity_count})
             return false
         end
     elseif state.placement_stage == "joining" then
-
         if join_networks(state) then
             if state.best_distance <= state.conf.wire_distance then
                 state.best_distance = nil
@@ -345,23 +349,21 @@ function place_best_pole(state)
                 state.placement_stage = "searching"
             end
         else
-            state.player.print("Giving up on connecting poles. " .. state.entity_count .. " entities remain unpowered and the poles are not fully connected.")
+            print_warning(state, {"pole-builder.cant-join", state.entity_count})
             return false
         end
     end
     return true
 end
 
-stages = {set_up_area, filter_entities, initial_poles, initialise_counts, collision_check, place_initial_pole, place_best_pole}
 
 function tick(state)
-
     if state.count > 1000 then
-        state.player.print("Aborting in stage " .. state.stage .. ", count too high.")
+        print_warning(state, "PoleBuilder: Aborting in stage " .. state.stage .. ", count too high.")
         state.stage = 1000
-        return
+        return 
     end
-    if stages[state.stage](state) then
+    if state.stages[state.stage](state) then
         state.count = state.count + 1
     else
         state.stage = state.stage + 1
@@ -369,18 +371,27 @@ function tick(state)
     end
 end
 
-
-function on_selected_area(event)
-    local player = game.players[event.player_index]
+function run_pole_builder(data)
+    local player = data.player
     local force = player.force
     local surface = player.surface
-    local conf = get_config(player)
-    local top = math.floor(event.area.left_top.y) - 1
-    local left = math.floor(event.area.left_top.x) - 1
-    local bottom = math.ceil(event.area.right_bottom.y)
-    local right = math.ceil(event.area.right_bottom.x)
-
-
+    local conf = data.conf
+    
+    local area = data.area
+    if not area then
+        area = find_collision_bounding_box(data.entities)
+    end
+    data.padding = data.padding or 1
+    local top = math.floor(area.left_top.y - data.padding)
+    local left = math.floor(area.left_top.x - data.padding)
+    local bottom = math.ceil(area.right_bottom.y + data.padding)
+    local right = math.ceil(area.right_bottom.x + data.padding)
+    
+    local entities = data.entities
+    if not entities then
+        entities = surface.find_entities_filtered({area = area, force = force})
+    end
+    
     local state = {
         surface = surface,
         player = player,
@@ -392,26 +403,60 @@ function on_selected_area(event)
         width = right - left,
         height = bottom - top,
         area = {},
-        entities = event.entities,
+        entities = entities,
         entity_count = nil,
         pole_positions = {},
         initial_poles = {},
         placement_stage = "searching",
         stage = 1,
         count = 1,
-        conf = conf
+        conf = conf,
+        surpress_info = data.surpress_info,
+        surpress_warnings = data.surpress_warnings,
+        stages = {set_up_area, filter_entities, initial_poles, initialise_counts, collision_check, place_initial_pole, place_best_pole}
     }
 
     if conf.run_over_multiple_ticks then
         register(state)
     else
-        while state.stage <= #stages do
+        while state.stage <= #state.stages do
             tick(state)
         end
     end
 end
 
---[[  On tick  ]]--
+function on_selected_area(event)
+    local player = game.players[event.player_index]
+    local conf = get_config(player)
+    
+    local top = math.floor(event.area.left_top.y)
+    local left = math.floor(event.area.left_top.x)
+    local bottom = math.ceil(event.area.right_bottom.y)
+    local right = math.ceil(event.area.right_bottom.x)
+    
+    run_pole_builder({player = player, conf = conf, area = make_area(left, top, right, bottom), entities = event.entities, surpress_info = true, surpress_warnings = true})
+end
+
+function remote_invoke(data)
+    if not data or type(data) ~= "table" or not data.player or (not data.area and not data.entities) then
+        game.print("PoleBuilder Error: bad remote invocation.")
+        return nil
+    end
+    if not data.conf then
+        data.conf = get_config(data.player)
+    end
+    if data.pole then
+        if not game.entity_prototypes[data.pole] or game.entity_prototypes[data.pole].type ~= "electric-pole" then
+            data.player.print("PoleBuilder Error: bad remote invocation - pole does not exist.")
+            return nil
+        end
+        data.conf.pole = data.pole
+    end
+    data.conf = set_up_config(data.conf)
+    -- TODO: Check for other poles in the area?
+    run_pole_builder(data)
+    return true
+end
 
 function register(state)
     if not global.PB_states then
@@ -425,7 +470,6 @@ function register(state)
 end
 
 function on_tick(event)
-    -- if(event.tick % 60 == 0) then game.print("Handler running.") end
     if #global.PB_states == 0 then
         script.on_event(defines.events.on_tick, nil)
     else
@@ -433,7 +477,7 @@ function on_tick(event)
         local i = 1
         while i <= #global.PB_states do
             local state = global.PB_states[i]
-            if state.stage <= #stages then
+            if state.stage <= #state.stages then
                 tick(state)
                 i = i + 1
             else
@@ -465,3 +509,5 @@ script.on_event(
         end
     end
 )
+
+remote.add_interface("PoleBuilder", {config = set_config_global, reset = reset_all, invoke = remote_invoke})
