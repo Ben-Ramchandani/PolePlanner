@@ -5,5 +5,5 @@
   "author": "bob809",
   "description": "Automatically place power poles.",
   "factorio_version": "0.15.0",
-  "dependencies": ["base >= 0.15.00"]
+  "dependencies": ["base >= 0.15.00", "PlannerCore >= 0.0.1"]
 }
