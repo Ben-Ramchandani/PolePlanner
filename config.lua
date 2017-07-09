@@ -26,7 +26,6 @@ function set_up_config(conf)
         conf.collision_top = math.floor(prototype.collision_box.left_top.y)
         conf.collision_right = math.ceil(prototype.collision_box.right_bottom.x)
         conf.collision_bottom = math.ceil(prototype.collision_box.right_bottom.y)
-        game.print(conf.collision_right)
     end
 
     return conf
@@ -40,7 +39,7 @@ function get_config(player)
     return set_up_config(conf)
 end
 
-function set_config(player, new_conf) -- Override the configuration file on a per save basis.
+function set_config(player, new_conf)
     if new_conf and type(new_conf) == "table" then
         global.PB_CONF_overrides[player.index] = table.combine(new_conf, global.PB_CONF_overrides[player.index])
     end
@@ -54,17 +53,26 @@ end
 
 function reset_all()
     global.PB_CONF_overrides = {}
+    global.PB_CONF = table.clone(PB_CONF)
+end
+
+function validate_config(partialConf)
+    if partialConf.pole then
+        return game.entity_prototypes[partialConf.pole] and game.entity_prototypes[partialConf.pole].type == "electric-pole"
+    else
+        return true
+    end
 end
 
 
 function init_config()
-    if not (global.PB_CONF and game.entity_prototypes[global.PB_CONF.pole]) then
-        global.PB_CONF = PB_CONF
+    if not (global.PB_CONF and global.PB_CONF.pole and validate_config(global.PB_CONF)) then
+        global.PB_CONF = table.clone(PB_CONF)
     end
 
     if global.PB_CONF_overrides then
         for k, v in pairs(global.PB_CONF_overrides) do
-            if v.pole and not game.entity_prototypes[v.pole] then
+            if not validate_config(v) then
                 global.PB_CONF_overrides[k] = {}
             end
         end

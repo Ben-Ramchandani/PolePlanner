@@ -51,13 +51,13 @@ end
 
 function print_info(state, info)
     if not state.surpress_info then
-        state.player.print(info)
+        state.player.print({"pole-builder.info", info})
     end
 end
 
 function print_warning(state, warning)
     if not state.surpress_warnings then
-        state.player.print(warning)
+        state.player.print({"pole-builder.warn", warning})
     end
 end
 
@@ -115,9 +115,9 @@ function connected(pole_position, pole_radius, entity_bounding_box)
 end
 
 function set_up_area(state)
-    if state.count <= state.width then
+    if state.count < state.width then
         table.insert(state.area, {})
-        local i = state.count
+        local i = state.count + 1
         for j = 1, state.height do
             table.insert(state.area[i], {reachable_entities = {}})
         end
@@ -327,6 +327,7 @@ function place_best_pole(state)
             place_pole(state, max_position)
         else
             if state.entity_count == 0 then
+                print_info(state, {"pole-builder.success"})
                 return false
             else
                 state.placement_stage = "blocked"
@@ -363,11 +364,11 @@ function tick(state)
         state.stage = 1000
         return 
     end
-    if state.stages[state.stage](state) then
+    if state.stages[state.stage + 1](state) then
         state.count = state.count + 1
     else
         state.stage = state.stage + 1
-        state.count = 1
+        state.count = 0
     end
 end
 
@@ -382,10 +383,10 @@ function run_pole_builder(data)
         area = find_collision_bounding_box(data.entities)
     end
     data.padding = data.padding or 1
-    local top = math.floor(area.left_top.y - data.padding)
-    local left = math.floor(area.left_top.x - data.padding)
-    local bottom = math.ceil(area.right_bottom.y + data.padding)
-    local right = math.ceil(area.right_bottom.x + data.padding)
+    local top = math.floor(area.left_top.y - data.padding) - 1
+    local left = math.floor(area.left_top.x - data.padding) - 1
+    local bottom = math.ceil(area.right_bottom.y + data.padding) - 1
+    local right = math.ceil(area.right_bottom.x + data.padding) - 1
     
     local entities = data.entities
     if not entities then
@@ -408,8 +409,8 @@ function run_pole_builder(data)
         pole_positions = {},
         initial_poles = {},
         placement_stage = "searching",
-        stage = 1,
-        count = 1,
+        stage = 0,
+        count = 0,
         conf = conf,
         surpress_info = data.surpress_info,
         surpress_warnings = data.surpress_warnings,
@@ -417,6 +418,7 @@ function run_pole_builder(data)
     }
 
     if conf.run_over_multiple_ticks then
+        print_info(state, {"pole-builder.starting"})
         register(state)
     else
         while state.stage <= #state.stages do
@@ -434,7 +436,7 @@ function on_selected_area(event)
     local bottom = math.ceil(event.area.right_bottom.y)
     local right = math.ceil(event.area.right_bottom.x)
     
-    run_pole_builder({player = player, conf = conf, area = make_area(left, top, right, bottom), entities = event.entities, surpress_info = true, surpress_warnings = true})
+    run_pole_builder({player = player, conf = conf, area = make_area(left, top, right, bottom), entities = event.entities})
 end
 
 function remote_invoke(data)
@@ -453,7 +455,6 @@ function remote_invoke(data)
         data.conf.pole = data.pole
     end
     data.conf = set_up_config(data.conf)
-    -- TODO: Check for other poles in the area?
     run_pole_builder(data)
     return true
 end
